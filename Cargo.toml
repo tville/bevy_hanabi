@@ -54,13 +54,19 @@ ron = "0.8"
 bitflags = "2.3"
 typetag = { version = "0.2", optional = true }
 thiserror = "1.0"
-# Same versions as Bevy 0.14 (bevy_render)
-wgpu = "0.20"
-naga = "0.20"
-naga_oil = { version = "0.14", default-features = false, features = ["test_shader"] }
+# Same versions as Bevy 0.15 (bevy_render)
+wgpu = { version = "23", default-features = false, features = [
+  "wgsl",
+  "dx12",
+  "metal",
+  "naga-ir",
+  "fragile-send-sync-non-atomic-wasm",
+] }
+naga = { version = "23", features = ["wgsl-in"] }
+naga_oil = { version = "0.16", default-features = false, features = ["test_shader"] }
 
 [dependencies.bevy]
-version = "0.14"
+version = "0.15.0-rc.3"
 default-features = false
 features = [ "bevy_core_pipeline", "bevy_render", "bevy_asset", "x11" ]
 
@@ -69,14 +75,18 @@ all-features = true
 
 [dev-dependencies]
 # For world inspector; required if "examples_world_inspector" is used.
-bevy-inspector-egui = "0.25"
-bevy_egui = { version = "0.28", default-features = false, features = [
-    "manage_clipboard", "open_url"
-] }
-egui = "0.28"
+#bevy-inspector-egui = "0.25"
+#bevy_egui = { version = "0.28", default-features = false, features = [
+#    "manage_clipboard", "open_url"
+#] }
+#egui = "0.28"
+
+bevy_sprite = "0.15.0-rc.3"
+bevy_text = "0.15.0-rc.3"
+bevy_ui = { version = "0.15.0-rc.3", features = [ "bevy_text" ] }
 
 # For glTF animations (Fox.glb)
-bevy_gltf = { version = "0.14", features = [ "bevy_animation" ] }
+bevy_gltf = { version = "0.15.0-rc.3", features = [ "bevy_animation" ] }
 
 # For procedural texture generation in examples
 noise = "0.9"

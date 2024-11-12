@@ -2044,7 +2044,7 @@ else { return c1; }
             let entity = world.spawn(ParticleEffectBundle::default()).id();
 
             // Spawn a camera, otherwise ComputedVisibility stays at HIDDEN
-            world.spawn(Camera3dBundle::default());
+            world.spawn(Camera3d::default());
 
             entity
         };
@@ -2102,7 +2102,7 @@ else { return c1; }
                 .id();
 
             // Spawn a camera, otherwise ComputedVisibility stays at HIDDEN
-            world.spawn(Camera3dBundle::default());
+            world.spawn(Camera3d::default());
 
             (entity, handle)
         };
@@ -2214,7 +2214,7 @@ else { return c1; }
                 };
 
                 // Spawn a camera, otherwise ComputedVisibility stays at HIDDEN
-                world.spawn(Camera3dBundle::default());
+                world.spawn(Camera3d::default());
 
                 (entity, handle)
             };
