@@ -63,6 +63,7 @@ pub mod kill;
 pub mod output;
 pub mod position;
 pub mod velocity;
+pub mod floating_origin;
 
 pub use accel::*;
 pub use attr::*;
