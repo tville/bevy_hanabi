@@ -50,6 +50,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
     {{AGE_CODE}}
     {{UPDATE_CODE}}
+    {{SIMULATION_SPACE_TRANSFORM_PARTICLE}}
     {{REAP_CODE}}
 
     {{WRITEBACK_CODE}}

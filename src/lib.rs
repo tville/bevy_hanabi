@@ -498,6 +498,17 @@ pub enum SimulationSpace {
     #[default]
     Global,
 
+    /// Particles are simulated in global space, but with ability to modify a
+    /// secondary translation, for example a floating origin offset.
+    ///
+    /// The global space is the Bevy world space, adjusted for the given offset 
+    /// set by the property "secondary_translation".
+    /// Particles simulated in global space are "detached" from the emitter when
+    /// they spawn, and only influenced by the secondary translation after spawning. 
+    /// The particle's [`Attribute::POSITION`] is the world space position of the
+    /// particle.
+    GlobalWithOffset,
+
     /// Particles are simulated in local effect space.
     ///
     /// The local space is the space associated with the [`Transform`] of the
@@ -517,7 +528,7 @@ impl SimulationSpace {
     ///   position from simulation space to view space.
     pub fn eval(&self, context: &dyn EvalContext) -> Result<String, ExprError> {
         match context.modifier_context() {
-            ModifierContext::Init | ModifierContext::Update => match *self {
+            ModifierContext::Init => match *self {
                 SimulationSpace::Global => {
                     if !context.particle_layout().contains(Attribute::POSITION) {
                         return Err(ExprError::GraphEvalError(format!("Global-space simulation requires that the particles have a {} attribute.", Attribute::POSITION.name())));
@@ -527,13 +538,51 @@ impl SimulationSpace {
                         Attribute::POSITION.name()
                     ))
                 }
+                SimulationSpace::GlobalWithOffset => {
+                    if !context.particle_layout().contains(Attribute::POSITION) {
+                        return Err(ExprError::GraphEvalError(format!("Global-space simulation requires that the particles have a {} attribute.", Attribute::POSITION.name())));
+                    }
+                    if !context.particle_layout().contains(Attribute::POSITION_OFFSET) {
+                        return Err(ExprError::GraphEvalError(format!("Global-space simulation requires that the particles have a {} attribute.", Attribute::POSITION_OFFSET.name())));
+                    }
+                    if !context.property_layout().contains("secondary_translation") {
+                        return Err(ExprError::GraphEvalError("Global-space simulation with offset requires that the particles have a secondary_translation property.".to_string()));
+                    }
+                    Ok(format!(
+                        "particle.{} += transform[3].xyz;", // TODO: get_view_position()
+                        Attribute::POSITION.name(),              
+                    ))
+                }
                 SimulationSpace::Local => Ok("".to_string()),
+                
+            },
+            ModifierContext::Update => match *self {
+                SimulationSpace::GlobalWithOffset => {        
+                    Ok(format!(                        
+                        r##"
+    if (any(vec3<bool>(particle.{pos_offset_attr}.x != properties.{transl_attr}.x, 
+            particle.{pos_offset_attr}.y != properties.{transl_attr}.y, 
+            particle.{pos_offset_attr}.z != properties.{transl_attr}.z))) {{
+        // Adjust for changed offset, e.g. floating origin recentering.
+        particle.{pos_attr} += properties.{transl_attr} - particle.{pos_offset_attr};
+        // Then store the new offset
+        particle.{pos_offset_attr} = properties.{transl_attr};
+    }}
+                        "##,
+                        pos_attr = Attribute::POSITION.name(),
+                        pos_offset_attr = Attribute::POSITION_OFFSET.name(),
+                        transl_attr = "secondary_translation",
+                    ))
+                }
+                SimulationSpace::Global => Ok("".to_string()),                
+                SimulationSpace::Local => Ok("".to_string()),
+                
             },
             ModifierContext::Render => Ok(match *self {
                 // TODO: cast vec3 -> vec4 auomatically
-                SimulationSpace::Global => "vec4<f32>(local_position, 1.0)",
+                SimulationSpace::Global | SimulationSpace::GlobalWithOffset => "vec4<f32>(local_position, 1.0)",
                 // TODO: transform_world_to_view(...)
-                SimulationSpace::Local => "transform * vec4<f32>(local_position, 1.0)",
+                SimulationSpace::Local => "transform * vec4<f32>(local_position, 1.0)",                
             }
             .to_string()),
             _ => Err(ExprError::GraphEvalError(
@@ -886,6 +935,8 @@ impl EffectShaderSource {
         let mut layout_flags = LayoutFlags::NONE;
         if asset.simulation_space == SimulationSpace::Local {
             layout_flags |= LayoutFlags::LOCAL_SPACE_SIMULATION;
+        } else if asset.simulation_space == SimulationSpace::GlobalWithOffset {
+            layout_flags |= LayoutFlags::GLOBAL_SPACE_SIMULATION_WITH_OFFSET;
         }
         if let AlphaMode::Mask(_) = &asset.alpha_mode {
             layout_flags |= LayoutFlags::USE_ALPHA_MASK;
@@ -915,7 +966,7 @@ impl EffectShaderSource {
 
                 let sim_space_transform_code =
                     asset.simulation_space.eval(&init_context).map_err(|err| {
-                        error!("Failed to compile effect's simulation space: {}", err);
+                        error!("Failed to compile effect's simulation space in init context: {}", err);
                         ShaderGenerateError::Expr(err)
                     })?;
 
@@ -950,7 +1001,7 @@ impl EffectShaderSource {
             );
 
             // Generate the shader code for the update shader
-            let (mut update_code, update_extra) = {
+            let (mut update_code, update_extra, update_sim_space_transform_code) = {
                 let mut update_context =
                     ShaderWriter::new(ModifierContext::Update, &property_layout, &particle_layout);
                 for m in asset.update_modifiers_for_group(dest_group_index) {
@@ -962,7 +1013,15 @@ impl EffectShaderSource {
                         return Err(ShaderGenerateError::Expr(err));
                     }
                 }
-                (update_context.main_code, update_context.extra_code)
+
+                let sim_space_transform_code =
+                    asset.simulation_space.eval(&update_context).map_err(|err| {
+                        error!("Failed to compile effect's simulation space in update context: {}", err);
+                        ShaderGenerateError::Expr(err)
+                    })?;
+
+
+                (update_context.main_code, update_context.extra_code, sim_space_transform_code)
             };
 
             // Insert Euler motion integration if needed.
@@ -1140,7 +1199,11 @@ impl EffectShaderSource {
                 .replace("{{UPDATE_EXTRA}}", &update_extra)
                 .replace("{{PROPERTIES}}", &properties_code)
                 .replace("{{PROPERTIES_BINDING}}", &properties_binding_code)
-                .replace("{{GROUP_INDEX}}", &dest_group_index_code);
+                .replace("{{GROUP_INDEX}}", &dest_group_index_code)
+                .replace(
+                    "{{SIMULATION_SPACE_TRANSFORM_PARTICLE}}",
+                    &update_sim_space_transform_code,
+                );
             trace!(
                 "Configured update shader for '{}':\n{}",
                 asset.name,

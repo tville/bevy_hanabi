@@ -1998,6 +1998,8 @@ bitflags! {
         const NEEDS_NORMAL = (1 << 7);
         /// The effect is fully-opaque.
         const OPAQUE = (1 << 8);
+        /// The effect is simulated in global space, but with a separately modifiable additional offset.
+        const GLOBAL_SPACE_SIMULATION_WITH_OFFSET = (1 << 9);
     }
 }
 

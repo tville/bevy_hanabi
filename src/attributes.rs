@@ -538,6 +538,11 @@ impl AttributeInner {
         Value::Vector(VectorValue::new_vec3(Vec3::ZERO)),
     );
 
+    pub const POSITION_OFFSET: &'static AttributeInner = &AttributeInner::new(
+        Cow::Borrowed("position_offset"),
+        Value::Vector(VectorValue::new_vec3(Vec3::ZERO)),
+    );
+
     pub const VELOCITY: &'static AttributeInner = &AttributeInner::new(
         Cow::Borrowed("velocity"),
         Value::Vector(VectorValue::new_vec3(Vec3::ZERO)),
@@ -920,6 +925,19 @@ impl Attribute {
     /// [simulation space]: crate::SimulationSpace
     pub const POSITION: Attribute = Attribute(AttributeInner::POSITION);
 
+    /// The particle position offset in [simulation space].
+    ///
+    /// # Name
+    ///
+    /// `position_offset`
+    ///
+    /// # Type
+    ///
+    /// [`VectorType::VEC3F`] representing the XYZ coordinates of the position offset.
+    ///
+    /// [simulation space]: crate::SimulationSpace
+    pub const POSITION_OFFSET: Attribute = Attribute(AttributeInner::POSITION_OFFSET);
+
     /// The particle velocity in [simulation space].
     ///
     /// # Name
@@ -1241,8 +1259,9 @@ impl Attribute {
     declare_custom_attr_pub!(F32X4_3, "f32x4_3", 4, VEC4F);
 
     /// Collection of all the existing particle attributes.
-    const ALL: [Attribute; 32] = [
+    const ALL: [Attribute; 33] = [
         Attribute::POSITION,
+        Attribute::POSITION_OFFSET,
         Attribute::VELOCITY,
         Attribute::AGE,
         Attribute::LIFETIME,
